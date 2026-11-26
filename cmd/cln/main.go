@@ -27,7 +27,7 @@ func run() int {
 	defer stop()
 
 	info := app.BuildInfo{Version: version, Commit: commit, Date: date}
-	err := app.Run(ctx, os.Args[1:], os.Stdout, os.Stderr, info)
+	err := app.Run(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr, info)
 
 	switch {
 	case err == nil:
