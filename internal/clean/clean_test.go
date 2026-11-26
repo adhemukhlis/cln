@@ -73,7 +73,7 @@ func TestExecute(t *testing.T) {
 		{Category: "misc", Path: filepath.Join(root, "gone", ".DS_Store")},
 	}
 
-	rep, err := Execute(t.Context(), items)
+	rep, err := Execute(t.Context(), items, nil)
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -106,7 +106,7 @@ func TestExecuteContinuesAfterFailure(t *testing.T) {
 		return os.RemoveAll(p)
 	}
 
-	rep, err := execute(t.Context(), []Item{{Path: a}, {Path: b}}, remove)
+	rep, err := execute(t.Context(), []Item{{Path: a}, {Path: b}}, nil, remove)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,10 +123,27 @@ func TestExecuteCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	if _, err := Execute(ctx, []Item{{Path: file}}); !errors.Is(err, context.Canceled) {
+	if _, err := Execute(ctx, []Item{{Path: file}}, nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("Execute() error = %v, want context.Canceled", err)
 	}
 	if _, err := os.Stat(file); err != nil {
 		t.Errorf("file deleted after cancel: %v", err)
+	}
+}
+
+func TestExecuteReportsProgress(t *testing.T) {
+	root := t.TempDir()
+	items := []Item{{Display: "~/a", Path: filepath.Join(root, "a")}, {Display: "~/b", Path: filepath.Join(root, "b")}}
+	var seen []int
+	if _, err := Execute(t.Context(), items, func(done int, it Item) {
+		if it != items[done] {
+			t.Errorf("onItem(%d) item = %+v, want %+v", done, it, items[done])
+		}
+		seen = append(seen, done)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(seen) != 2 || seen[0] != 0 || seen[1] != 1 {
+		t.Errorf("onItem done values = %v, want [0 1]", seen)
 	}
 }
