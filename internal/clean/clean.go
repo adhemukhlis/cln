@@ -81,14 +81,18 @@ type Report struct {
 
 // Execute permanently deletes every item in order. A failed item is recorded
 // and does not stop the others. It stops early, returning the partial report
-// and an error, only when ctx is canceled.
-func Execute(ctx context.Context, items []Item) (Report, error) {
-	return execute(ctx, items, os.RemoveAll)
+// and an error, only when ctx is canceled. When onItem is not nil it is called
+// before each item with the number of items already processed.
+func Execute(ctx context.Context, items []Item, onItem func(done int, it Item)) (Report, error) {
+	return execute(ctx, items, onItem, os.RemoveAll)
 }
 
-func execute(ctx context.Context, items []Item, remove func(string) error) (Report, error) {
+func execute(ctx context.Context, items []Item, onItem func(int, Item), remove func(string) error) (Report, error) {
 	var rep Report
-	for _, it := range items {
+	for i, it := range items {
+		if onItem != nil {
+			onItem(i, it)
+		}
 		if err := ctx.Err(); err != nil {
 			return rep, fmt.Errorf("clean interrupted: %w", err)
 		}

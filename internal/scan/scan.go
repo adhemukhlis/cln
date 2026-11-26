@@ -21,6 +21,17 @@ type Options struct {
 	// descended into, and a candidate directory that contains an ignored path
 	// is not reported either, since deleting it would delete the ignored path.
 	Ignore []string
+	// Progress, when set, is called for every directory entered.
+	Progress func(Progress)
+}
+
+// Progress is a snapshot of a running scan.
+type Progress struct {
+	Dirs        int    // Directories entered so far.
+	Current     string // Directory being entered.
+	NodeModules int
+	Misc        int
+	Framework   int
 }
 
 // isIgnored reports whether path is listed in Ignore.
@@ -72,6 +83,7 @@ type Found struct {
 // directories, symlinks and unreadable directories are skipped.
 func Run(ctx context.Context, root string, opts Options) (Found, error) {
 	var found Found
+	dirs := 0
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return fmt.Errorf("scan interrupted: %w", ctxErr)
@@ -90,6 +102,13 @@ func Run(ctx context.Context, root string, opts Options) (Found, error) {
 				visitFile(path, d.Name(), &found)
 			}
 			return nil
+		}
+		dirs++
+		if opts.Progress != nil {
+			opts.Progress(Progress{
+				Dirs: dirs, Current: path,
+				NodeModules: len(found.NodeModules), Misc: len(found.Misc), Framework: len(found.Framework),
+			})
 		}
 		return visitDir(root, path, d.Name(), opts, &found)
 	})
