@@ -1,8 +1,10 @@
 name: Check
 
 # Runs only on PRs into main. PRs into development (work branches) run no CI.
-# Only development may open a PR into main; enforced by the source-branch job
-# (mark it as a required status check in main's branch protection).
+# Only development may open a PR into main; enforced by the source-branch job.
+# `validate` is the single required status check in main's ruleset: it passes
+# only when every other job succeeded, so jobs can be added here without
+# touching the ruleset, and skipped/cancelled jobs can never slip through.
 on:
   pull_request:
     branches: [main]
@@ -67,3 +69,21 @@ jobs:
         with:
           version: "~> v2"
           args: check
+
+  validate:
+    name: validate
+    if: always()
+    needs: [source-branch, lint, test, goreleaser-check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: All checks passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for r in $RESULTS; do
+            if [ "$r" != "success" ]; then
+              echo "::error::Not all checks succeeded."
+              exit 1
+            fi
+          done
