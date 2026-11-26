@@ -15,6 +15,7 @@ import (
 	"github.com/adhemukhlis/cln/internal/clean"
 	"github.com/adhemukhlis/cln/internal/config"
 	"github.com/adhemukhlis/cln/internal/ignore"
+	"github.com/adhemukhlis/cln/internal/progress"
 	"github.com/adhemukhlis/cln/internal/scan"
 )
 
@@ -71,7 +72,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	case "ignore":
 		return runIgnore(stdout)
 	case "scan":
-		return runScan(ctx, stdout)
+		return runScan(ctx, stdout, stderr)
 	case "version":
 		return printVersion(stdout, info)
 	default:
@@ -117,7 +118,7 @@ func runInit(stdout io.Writer) error {
 // runScan finds cleanup candidates under the configured home path and writes
 // result.json to the working directory. It requires config.json from `cln init`
 // and skips the paths listed in ignore.json, if present.
-func runScan(ctx context.Context, stdout io.Writer) error {
+func runScan(ctx context.Context, stdout, stderr io.Writer) error {
 	cfg, err := config.Load(config.FileName)
 	if err != nil {
 		return err
@@ -131,10 +132,18 @@ func runScan(ctx context.Context, stdout io.Writer) error {
 		return fmt.Errorf("write output: %w", err)
 	}
 
+	line := progress.New(stderr)
 	found, err := scan.Run(ctx, home, scan.Options{
 		SkipDirs: scan.DefaultSkipDirs(home, cfg.Device.OS),
 		Ignore:   ignored,
+		Progress: func(p scan.Progress) {
+			line.Tick(func(spinner string) string {
+				return fmt.Sprintf("%s %s dirs · %d node_modules · %d misc · %d framework  %s",
+					spinner, progress.Count(p.Dirs), p.NodeModules, p.Misc, p.Framework, shortPath(home, p.Current))
+			})
+		},
 	})
+	line.Clear()
 	if err != nil {
 		return err
 	}
@@ -213,7 +222,12 @@ func runClean(ctx context.Context, args []string, stdin io.Reader, stdout, stder
 		}
 	}
 
-	rep, execErr := clean.Execute(ctx, plan.Items)
+	line := progress.New(stderr)
+	total := len(plan.Items)
+	rep, execErr := clean.Execute(ctx, plan.Items, func(done int, it clean.Item) {
+		line.Show(fmt.Sprintf("%s %d/%d  %s", line.Bar(done, total, 20), done, total, it.Display))
+	})
+	line.Clear()
 	for _, f := range rep.Failed {
 		if _, err := fmt.Fprintf(stderr, "failed: %s: %v\n", f.Item.Display, f.Err); err != nil {
 			return fmt.Errorf("write output: %w", err)
@@ -278,4 +292,12 @@ func (p *printer) printf(format string, args ...any) {
 	if _, err := fmt.Fprintf(p.w, format, args...); err != nil {
 		p.err = fmt.Errorf("write output: %w", err)
 	}
+}
+
+// shortPath shows path as "~/..." when it is inside home.
+func shortPath(home, path string) string {
+	if short, err := scan.Tilde(home, path); err == nil {
+		return short
+	}
+	return path
 }

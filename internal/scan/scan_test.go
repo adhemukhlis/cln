@@ -241,3 +241,28 @@ func TestExpand(t *testing.T) {
 		}
 	}
 }
+
+func TestRunProgress(t *testing.T) {
+	root := t.TempDir()
+	mkTree(t, root, []string{"a/node_modules/dep", "b"}, []string{"a/package.json", "b/.DS_Store"})
+
+	var last Progress
+	calls := 0
+	got, err := Run(t.Context(), root, Options{Progress: func(p Progress) {
+		calls++
+		if p.Dirs != calls {
+			t.Errorf("Dirs = %d on call %d", p.Dirs, calls)
+		}
+		last = p
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Entered: a, a/node_modules (skipped after being counted), b.
+	if calls != 3 {
+		t.Errorf("Progress called %d times, want 3", calls)
+	}
+	if last.NodeModules != len(got.NodeModules) {
+		t.Errorf("last NodeModules = %d, want %d", last.NodeModules, len(got.NodeModules))
+	}
+}
