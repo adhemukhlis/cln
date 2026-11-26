@@ -35,13 +35,15 @@ jobs:
     needs: source-branch
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+          # No go.sum while the module has no dependencies; key the cache on go.mod.
+          cache-dependency-path: go.mod
       - name: Verify go.mod is tidy
         run: go mod tidy -diff
-      - uses: golangci/golangci-lint-action@v8
+      - uses: golangci/golangci-lint-action@v9
         with:
           version: latest
 
@@ -53,10 +55,12 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+          # No go.sum while the module has no dependencies; key the cache on go.mod.
+          cache-dependency-path: go.mod
       - run: go vet ./...
       - run: go test -race ./...
 
@@ -64,8 +68,8 @@ jobs:
     needs: source-branch
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: actions/checkout@v7
+      - uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
           args: check
