@@ -36,6 +36,7 @@ Usage:
 
 Commands:
   clean      Permanently delete the items in result.json (asks first; -yes skips)
+  flush-dns  Flush the DNS cache (macOS/Linux: run with sudo)
   init       Write config.json for this device to the current directory
   ignore     Create an empty ignore.json in the current directory
   scan       Find cleanup candidates under the home path (minus ignore.json); writes result.json
@@ -69,6 +70,8 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return runInit(stdout)
 	case "clean":
 		return runClean(ctx, flags.Args()[1:], stdin, stdout, stderr)
+	case "flush-dns":
+		return runDNS(ctx, stdout)
 	case "ignore":
 		return runIgnore(stdout)
 	case "scan":
