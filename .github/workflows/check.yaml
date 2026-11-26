@@ -1,6 +1,8 @@
 name: Check
 
-# Runs on every PR into main (e.g. development -> main).
+# Runs only on PRs into main. PRs into development (work branches) run no CI.
+# Only development may open a PR into main; enforced by the source-branch job
+# (mark it as a required status check in main's branch protection).
 on:
   pull_request:
     branches: [main]
@@ -13,7 +15,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  source-branch:
+    name: source-branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only development may merge into main
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          if [ "$HEAD_REF" != "development" ] || [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::PRs into main must come from development (got $HEAD_REPO:$HEAD_REF)."
+            exit 1
+          fi
+
   lint:
+    needs: source-branch
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +44,7 @@ jobs:
           version: latest
 
   test:
+    needs: source-branch
     strategy:
       fail-fast: false
       matrix:
@@ -41,6 +59,7 @@ jobs:
       - run: go test -race ./...
 
   goreleaser-check:
+    needs: source-branch
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
