@@ -1,0 +1,285 @@
+version: "2"
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+  tests: true
+  relative-path-mode: gomod
+
+linters:
+  default: none
+  enable:
+    # --- Bug prevention (core set, do not remove) ---
+    - errcheck # Unchecked errors
+    - govet # Suspicious constructs (printf verbs, struct tags, etc.)
+    - staticcheck # Static analysis (includes gosimple and stylecheck)
+    - unused # Dead code
+    - ineffassign # Assignments that are never used
+
+    # --- Correctness (subtle bugs errcheck cannot catch) ---
+    - nilerr # Returning nil when err != nil
+    - errorlint # Correct %w wrapping, errors.Is/As usage
+    - nilnil # Simultaneous return of nil value and nil error
+    - wrapcheck # Errors from external packages must be wrapped
+    - forcetypeassert # Type assertions require the ', ok' form
+    - fatcontext # Context captured in loops or goroutines
+    - containedctx # Context must not be stored in structs
+    - reassign # Package-level variables must not be reassigned
+    - makezero # Slices declared with non-zero length then appended to
+    - durationcheck # Ambiguous durations without a time unit
+
+    # --- Context discipline ---
+    - bodyclose # resp.Body must be closed (e.g. update checks)
+    - noctx # HTTP requests and exec.Command must carry a context
+
+    # --- Dependency discipline: keep the binary small and static ---
+    - depguard # Only stdlib + allow-listed modules are importable (see settings)
+
+    # --- Exit discipline: os.Exit / log.Fatal only in main.go ---
+    - forbidigo
+
+    # --- Modern best practices ---
+    - revive # Coding standards (golint replacement)
+    - gocritic # Opinionated diagnostics (bugs, style, performance)
+    - modernize # Modern Go idioms (min/max, slices/maps stdlib, iterators)
+    - intrange # Prefer `for i := range n` (Go 1.22+)
+    - unconvert # Redundant type conversions
+    - unparam # Unused function parameters
+    - usestdlibvars # Prefer stdlib constants (e.g. http.MethodGet)
+    - tagalign # Aligned struct tags
+    - exptostd # Use stdlib instead of x/exp equivalents
+    - gochecknoglobals # No mutable global vars (const is allowed; main.go excluded)
+    - gochecknoinits # No func init()
+    - asciicheck # Identifiers must be ASCII
+
+    # --- Security (path handling, file permissions, exec) ---
+    - gosec
+
+    # --- Complexity (advisory thresholds, see settings) ---
+    - gocyclo # Cyclomatic complexity
+    - gocognit # Cognitive complexity
+    - nestif # Deeply nested if statements
+    - dupl # Duplicated code blocks
+    - funlen # Overly long functions
+
+    # --- Style and readability ---
+    - misspell # Common typos
+    - dupword # Duplicated words
+    - godot # Comments must end with a period
+    - whitespace # Redundant blank lines
+    - godox # TODO/FIXME/HACK markers
+
+    # --- Performance ---
+    - prealloc # Slices that should be preallocated
+    - perfsprint # fmt.Sprintf replaceable with faster alternatives
+
+    # --- Testing (stdlib testing only; no testify, no mocks lib) ---
+    - thelper # Test helpers must call t.Helper()
+    - usetesting # Prefer t.Context(), t.TempDir(), t.Setenv()
+
+    # --- Meta ---
+    - nolintlint # Validate //nolint directives
+
+    # --- Optional linters (enable per project need) ---
+    # Deep nil-dereference analysis. Slow, enable when chasing a nil panic.
+    # - nilaway
+
+    # Only needed once a database is added.
+    # - rowserrcheck
+    # - sqlclosecheck
+
+    # testify users only. Not adopted in v1 (stdlib testing).
+    # - testifylint
+
+    # Strict style rules. Noisy, enable only if agreed.
+    # - wsl_v5
+    # - ireturn
+    # - lll
+    # - nlreturn
+
+    # --- Do not enable for this project ---
+    # - exhaustive   # Switches over OS/platform enums are intentionally partial.
+    # - exhaustruct  # Zero-value structs are idiomatic.
+    # - goconst      # Flags repeated short strings (flag names, labels).
+    # - maintidx     # Overlaps with gocognit
+    # - copyloopvar  # Obsolete since Go 1.22 (per-iteration loop variables)
+    # - cyclop       # Duplicates gocyclo
+    # - testpackage  # White-box tests are fine here
+    # - paralleltest # No t.Parallel() mandate in v1
+
+  settings:
+    revive:
+      rules:
+        - name: var-naming
+        - name: unexported-return
+        - name: time-naming
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: indent-error-flow
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: if-return
+        - name: increment-decrement
+        - name: var-declaration
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: blank-imports
+        - name: early-return
+        - name: unnecessary-stmt
+        - name: unused-parameter
+        - name: use-any
+        - name: use-errors-new
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+      disabled-checks:
+        - unnamedResult
+        - hugeParam # Passing small config structs by value is fine.
+
+    depguard:
+      rules:
+        # Default rule: deny everything not explicitly allowed.
+        # Keeps the dependency tree (and binary size) minimal.
+        # To add a dep: justify it, then add it here.
+        main:
+          allow:
+            - $gostd
+            - github.com/adhemukhlis/cln # own module
+
+    forbidigo:
+      forbid:
+        # Exiting is main.go's job (excluded below); anywhere else these
+        # skip deferred cleanup (open files, partial deletions, signal handling).
+        - pattern: ^os\.Exit$
+          msg: "return the error up to main instead (os.Exit lives in main.go only)"
+        - pattern: ^log\.Fatal.*$
+          msg: "log.Fatal skips deferred cleanup; return the error up to main"
+
+    gocyclo:
+      min-complexity: 15
+
+    gocognit:
+      min-complexity: 20
+
+    nestif:
+      min-complexity: 4
+
+    funlen:
+      lines: 120
+      statements: 60
+      ignore-comments: true
+
+    dupl:
+      threshold: 150
+
+    errcheck:
+      check-type-assertions: false # Covered by forcetypeassert
+      check-blank: true
+
+    gosec:
+      excludes:
+        - G104 # Covered by errcheck
+      severity: medium
+      confidence: medium
+
+    godot:
+      scope: declarations
+      capital: true
+      period: true
+
+    misspell:
+      locale: US
+
+    wrapcheck:
+      # Errors from our own internal packages are already wrapped there.
+      ignore-package-globs:
+        - github.com/adhemukhlis/cln/*
+      ignore-sigs:
+        - .Errorf(
+        - errors.New(
+        - errors.Join(
+        - errors.Unwrap(
+        - .Error(
+
+    godox:
+      keywords:
+        - TODO
+        - FIXME
+        - HACK
+        - BUG
+
+    nolintlint:
+      require-explanation: true # //nolint requires a reason
+      require-specific: true # //nolint:errcheck, not bare //nolint
+      allow-unused: false # Unused //nolint is an error
+
+  exclusions:
+    generated: strict
+    warn-unused: true
+    rules:
+      # Tests: relaxed duplication and complexity checks.
+      - path: _test\.go
+        linters:
+          - dupl
+          - gosec
+          - gocyclo
+          - gocognit
+          - funlen
+          - wrapcheck
+          - gochecknoglobals
+
+      # Vendored and build output.
+      - path: (vendor|third_party|bin|dist)/
+        linters:
+          - dupl
+          - gocyclo
+          - gocognit
+          - funlen
+          - gosec
+          - wrapcheck
+
+      # Entry point: owns process exit and flag parsing per subcommand,
+      # and the version/commit/date vars set with -ldflags -X.
+      - path: (^|/)main\.go$
+        linters:
+          - gocyclo
+          - gocognit
+          - funlen
+          - forbidigo
+          - gochecknoglobals
+
+formatters:
+  enable:
+    - gofmt
+    - gci # Deterministic import grouping (stdlib, third-party, local)
+  # gofumpt is intentionally disabled: still reports false positives in
+  # golangci-lint 2.14.0 with Go 1.27 (`fmt -d` is clean, `run` flags imports).
+  # Re-enable only when `fmt -d` and `run` agree (both green).
+  # - gofumpt
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/adhemukhlis/cln)
+      custom-order: true # Honor the section order above: stdlib, third-party, local
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+output:
+  formats:
+    text:
+      path: stdout
+      print-linter-name: true
+      print-issued-lines: true
+      colors: true
+  sort-order:
+    - linter
+    - file
